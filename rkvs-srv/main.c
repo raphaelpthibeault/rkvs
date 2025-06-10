@@ -129,7 +129,10 @@ main(int argc, char *argv[])
 
 		// fork
 		printf("Incoming connection\n");
-		cli_conn(s, c);
+		if (!fork()) {
+			cli_conn(s, c);
+		}
+
 	}
 	
 	return -1;	
