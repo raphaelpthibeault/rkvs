@@ -36,6 +36,27 @@ main(int argc, char *argv[])
 	}
 
 	printf("Connected\n");
+
+	char wbuf[64] = "Hello, ";
+	ssize_t n;
+	n = write(fd, wbuf, strlen(wbuf));
+	if (n < 0) {
+		fprintf(stderr, "write() error\n");
+		return -1;
+	}
+
+	// read the server's response
+	char rbuf[64];
+	n = read(fd, rbuf, sizeof(rbuf)-1);
+	if (n < 0) {
+		fprintf(stderr, "read() error\n");
+		return -1;
+	}
+
+	printf("Server sent: '%s'\n", rbuf);
+
+
+
 	close(fd);
 
 

@@ -81,9 +81,23 @@ void
 cli_conn(int s, int c)
 {
 	(void)s;
-	(void)c;
-}
 
+	char rbuf[64];
+	ssize_t n = read(c, rbuf, sizeof(rbuf)-1);
+	if (n < 0) {
+		fprintf(stderr, "read() error\n");
+		return;
+	}
+
+	printf("Client sent: '%s'\n", rbuf);
+	char wbuf[64] = "world";
+	n = write(c, wbuf, strlen(wbuf));
+	if (n < 0) {
+		fprintf(stderr, "write() error\n");
+		return;
+	}
+
+}
 
 int
 main(int argc, char *argv[]) 
@@ -113,10 +127,10 @@ main(int argc, char *argv[])
 			continue;
 		}
 
+		// fork
 		printf("Incoming connection\n");
-
+		cli_conn(s, c);
 	}
-
 	
 	return -1;	
 }
