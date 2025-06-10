@@ -9,6 +9,8 @@
 #include <fcntl.h>
 #include <stdio.h>
 
+#include <common/proto.h>
+
 #define LISTENADDR "127.0.0.1"
 
 /* global */
@@ -17,7 +19,7 @@ char *error;
 /* server init  
  * returns 0 on error, or returns a socket fd
  * */
-int
+static int
 srv_init(int portno)
 {
 	int s;
@@ -28,6 +30,9 @@ srv_init(int portno)
 		error = "socket() error\n";
 		return 0;
 	}
+
+	int val = 1;
+	setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
 
 	srv.sin_family = AF_INET;
 	srv.sin_addr.s_addr = inet_addr(LISTENADDR);
@@ -52,7 +57,7 @@ srv_init(int portno)
 /* client accept
  * returns 0 on error, or returns new client socket fd
  * */
-int
+static int
 cli_accept(int s) 
 {
 	int c;
@@ -70,33 +75,51 @@ cli_accept(int s)
 	return c;
 }
 
-char *
-cli_read(int c) 
-{
-	(void)c;
-	return NULL;
-}
-
-void
-cli_conn(int s, int c)
+static int32_t
+request_service(int s, int c)
 {
 	(void)s;
 
-	char rbuf[64];
-	ssize_t n = read(c, rbuf, sizeof(rbuf)-1);
-	if (n < 0) {
-		fprintf(stderr, "read() error\n");
-		return;
+	char rbuf[4+MAX_MSG_SIZE];
+	int32_t err;
+
+	err = read_n(c, rbuf, 4);
+	if (err < 0) {
+		fprintf(stderr, "read_n error\n");
+		return -1;
 	}
 
-	printf("Client sent: '%s'\n", rbuf);
-	char wbuf[64] = "world";
-	n = write(c, wbuf, strlen(wbuf));
-	if (n < 0) {
-		fprintf(stderr, "write() error\n");
-		return;
+	uint32_t len;
+	// assume little endian
+	memcpy(&len, &rbuf, 4);
+	if (len > MAX_MSG_SIZE) {
+		fprintf(stderr, "Message too big\n");
+		return -1;
 	}
 
+	err = read_n(c, &rbuf[4], len);
+	if (err < 0) {
+		fprintf(stderr, "read_n error\n");
+		return -1;
+	}
+	rbuf[4+len] = '\0';
+	
+	printf("Client sent: '%s'\n", &rbuf[4]);
+
+	// reply using the same stub protocol
+	char msg[] = "world";
+	char wbuf[4 + sizeof(msg)];
+	len = (uint32_t)strlen(msg);
+	memcpy(wbuf, &len, 4);
+	memcpy(&wbuf[4], msg, len);
+
+	err = write_n(c, wbuf, 4 + len);
+	if (err < 0) {
+		fprintf(stderr, "write_n error\n");
+		return -1;
+	}
+
+	return 0;
 }
 
 int
@@ -127,12 +150,19 @@ main(int argc, char *argv[])
 			continue;
 		}
 
-		// fork
 		printf("Incoming connection\n");
-		if (!fork()) {
-			cli_conn(s, c);
-		}
+		if (fork() > 0) {
+			/* one forked thread services all requests of one client connection */	
+			int32_t err;
+			while (1) {
+				err = request_service(s, c);
+				if (err) {
+					break;
+				}
+			}
 
+			close(c);
+		}
 	}
 	
 	return -1;	

@@ -9,8 +9,59 @@
 #include <fcntl.h>
 #include <stdio.h>
 
+#include <common/proto.h>
+
 #define CONNECTADDR "127.0.0.1"
 #define PORT 8282
+
+/* global */
+char *error;
+
+static int32_t
+query(int fd, const char *msg)
+{
+	int32_t err;
+	uint32_t len;
+
+	len = (uint32_t)strlen(msg);
+
+	char wbuf[4 + MAX_MSG_SIZE];
+	memcpy(wbuf, &len, 4);
+	memcpy(&wbuf[4], msg, len);
+
+	err = write_n(fd, wbuf, 4 + len);
+	if (err < 0) {
+		fprintf(stderr, "write_n error\n");
+		return err;
+	}
+
+	/* read server response */
+
+	char rbuf[4+MAX_MSG_SIZE];
+
+	err = read_n(fd, rbuf, 4);
+	if (err < 0) {
+		fprintf(stderr, "read_n error\n");
+		return err;
+	}
+
+	memcpy(&len, &rbuf, 4);
+	if (len > MAX_MSG_SIZE) {
+		fprintf(stderr, "Message too big\n");
+		return -2;
+	}
+
+	err = read_n(fd, &rbuf[4], len);
+	if (err < 0) {
+		fprintf(stderr, "read_n error\n");
+		return err;
+	}
+
+	rbuf[4+len] = '\0';
+	printf("Server sent: '%s'\n", &rbuf[4]);
+
+	return 0;
+}
 
 int 
 main(int argc, char *argv[]) 
@@ -37,28 +88,19 @@ main(int argc, char *argv[])
 
 	printf("Connected\n");
 
-	char wbuf[64] = "Hello, ";
-	ssize_t n;
-	n = write(fd, wbuf, strlen(wbuf));
-	if (n < 0) {
-		fprintf(stderr, "write() error\n");
-		return -1;
-	}
+	int32_t err;
+	/* the server will respond to all queries in the connection */
+	err = query(fd, "Hello1");
+	if (err) goto done;
+	err = query(fd, "Hello2");
+	if (err) goto done;
+	err = query(fd, "Hello3");
+	if (err) goto done;
+	err = query(fd, "Hello4");
+	if (err) goto done;
 
-	// read the server's response
-	char rbuf[64];
-	n = read(fd, rbuf, sizeof(rbuf)-1);
-	if (n < 0) {
-		fprintf(stderr, "read() error\n");
-		return -1;
-	}
-
-	printf("Server sent: '%s'\n", rbuf);
-
-
-
+done:
 	close(fd);
-
 
 	return 0;
 }
