@@ -20,7 +20,7 @@
  * returns -1 on read error, 0 on success
  * */
 int32_t 
-read_n(int fd, char *buf, size_t n)
+read_n(int fd, uint8_t *buf, size_t n)
 {
 	while (n > 0) {
 		ssize_t rv = read(fd, buf, n);
@@ -40,7 +40,7 @@ read_n(int fd, char *buf, size_t n)
  * returns -1 on write error, 0 on success
  * */
 int32_t
-write_n(int fd, const char *buf, size_t n)
+write_n(int fd, const uint8_t *buf, size_t n)
 {
 	while (n > 0) {
 		ssize_t rv = write(fd, buf, n);

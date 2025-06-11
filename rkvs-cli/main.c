@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 #include <common/proto.h>
+#include <common/arr.h>
 
 #define CONNECTADDR "127.0.0.1"
 #define PORT 8282
@@ -18,26 +19,35 @@
 char *error;
 
 static int32_t
-query(int fd, const char *msg)
+send_request(int fd, const uint8_t *msg, uint32_t _len)
 {
 	int32_t err;
-	uint32_t len;
+	uint32_t len = _len;
 
-	len = (uint32_t)strlen(msg);
+	if (len > MAX_MSG_SIZE) {
+		return -1;
+	}
 
-	char wbuf[4 + MAX_MSG_SIZE];
-	memcpy(wbuf, &len, 4);
-	memcpy(&wbuf[4], msg, len);
+	uint8_t wbuf[4 + MAX_MSG_SIZE];
+	size_t i = 0;
+	arr_append(wbuf, &i, &len, sizeof(len)); 
+	arr_append(wbuf, &i, msg, len);
 
-	err = write_n(fd, wbuf, 4 + len);
+	err = write_n(fd, wbuf, i);
 	if (err < 0) {
 		fprintf(stderr, "write_n error\n");
 		return err;
 	}
 
-	/* read server response */
+	return 0;
+}
 
-	char rbuf[4+MAX_MSG_SIZE];
+static int32_t
+rcv_response(int fd)
+{
+	uint8_t rbuf[4+MAX_MSG_SIZE];
+	int32_t err;
+	uint32_t len = 0;
 
 	err = read_n(fd, rbuf, 4);
 	if (err < 0) {
@@ -89,15 +99,27 @@ main(int argc, char *argv[])
 	printf("Connected\n");
 
 	int32_t err;
-	/* the server will respond to all queries in the connection */
-	err = query(fd, "Hello1");
-	if (err) goto done;
-	err = query(fd, "Hello2");
-	if (err) goto done;
-	err = query(fd, "Hello3");
-	if (err) goto done;
-	err = query(fd, "Hello4");
-	if (err) goto done;
+	size_t i, num = 5;
+
+	char *test_vectors[] = {
+		//"", <- fails, stops iterating through messages
+		"H",
+		"h1",
+		"hello2",
+		"foo",
+		"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+	};
+	
+	/* an attempt at pipelining requests */
+	for (i = 0; i < num; ++i) {
+		err = send_request(fd, (uint8_t*)test_vectors[i], strlen(test_vectors[i]));
+		if (err) goto done;
+	}
+
+	for (i = 0; i < num; ++i) {
+		err = rcv_response(fd);
+		if (err) goto done;
+	}
 
 done:
 	close(fd);

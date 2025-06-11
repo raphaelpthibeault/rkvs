@@ -6,7 +6,7 @@
 
 static const size_t MAX_MSG_SIZE = 4096;
 
-int32_t read_n(int fd, char *buf, size_t n);
-int32_t write_n(int fd, const char *buf, size_t n);
+int32_t read_n(int fd, uint8_t *buf, size_t n);
+int32_t write_n(int fd, const uint8_t *buf, size_t n);
 
 #endif // !__COMMON_PROTO_H__
